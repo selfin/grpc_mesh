@@ -1,8 +1,8 @@
 package grpc_mesh
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 const name string = "nb_hostname"
@@ -11,7 +11,7 @@ const port uint16 = 54321
 func TestGRPCNeighbor_String(t *testing.T) {
 	nb := newGRPCNeighbor(name, port)
 	str := nb.String()
-	if str != name{
+	if str != name {
 		t.Fatalf("Neighbor String() should return hostname")
 	}
 }

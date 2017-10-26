@@ -4,19 +4,18 @@ import (
 	"fmt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"log"
 	"sync"
 )
 
 type GRPCNeighbor struct {
-	mu sync.Mutex
 	// Host - discovered service neighbor hostname or ip addr
 	Host string
 	// Port - discovered service neighbor MygRPCClient port
 	Port uint16
-	// Client - interface to get your MygRPCClient Client
-	// use client, _ := GRPCNeighbor.Client.(MyGRPCClient)
+	// Client - interface to get gRPC Client
+	// use client, _ := GRPCNeighbor.Client.(gRPCClientType)
 	Client interface{}
+	mu     sync.Mutex
 	conn   *grpc.ClientConn
 }
 
@@ -44,7 +43,6 @@ func (gn *GRPCNeighbor) connector(f func(conn *grpc.ClientConn) (rpc_client inte
 	var err error
 	gn.conn, err = grpc.DialContext(context.Background(), gn.ConnectionString(), grpc.WithInsecure())
 	if err != nil {
-		log.Printf("Error dialing neighbor: %v", err)
 		return err
 	}
 	gn.Client = f(gn.conn)

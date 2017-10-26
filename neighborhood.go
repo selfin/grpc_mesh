@@ -8,6 +8,7 @@ import (
 	consul "github.com/hashicorp/consul/api"
 	"google.golang.org/grpc"
 	"log"
+	"os"
 	"sync"
 	"time"
 )
@@ -19,7 +20,7 @@ type Neighborhood interface {
 	// ConfigureConsul set consul config, if default config not suitable, use it before calling any other func
 	ConfigureConsul(*consul.Config) error
 	// Set MygRPCClient clent connector
-	// If connector didn't set neighbors, would not be added
+	// If connector didn't set, neighbors would not be added
 	WithConnector(f func(conn *grpc.ClientConn) (rpc_client interface{}))
 	// Announce registers services with consul
 	Announce(services ...*consul.AgentServiceRegistration) error
@@ -39,6 +40,8 @@ type Neighborhood interface {
 
 type gRPCNeighbors struct {
 	mu            sync.RWMutex
+	messages      *log.Logger
+	errors        *log.Logger
 	announcer     string
 	connector     func(conn *grpc.ClientConn) (rpc_client interface{})
 	services      []*consul.AgentServiceRegistration
@@ -48,11 +51,13 @@ type gRPCNeighbors struct {
 	neighbors     map[string]*GRPCNeighbor
 }
 
-// NewGRPCNeighbors returns prepared consul based discoverer
-func NewGRPCNeighbors() *gRPCNeighbors {
+// NewNeighborhood returns prepared consul based discovery
+func NewNeighborhood() Neighborhood {
 	return &gRPCNeighbors{
 		neighbors:     make(map[string]*GRPCNeighbor),
 		updater_close: make(chan bool),
+		messages:      log.New(os.Stdout, "", log.LstdFlags),
+		errors:        log.New(os.Stderr, "ERROR: ", log.LstdFlags|log.Lshortfile|log.Lmicroseconds),
 	}
 }
 
@@ -100,7 +105,7 @@ func (gns *gRPCNeighbors) StopAnnounce() {
 	close(gns.updater_close)
 	for _, service := range gns.services {
 		if err := gns.client.Agent().ServiceDeregister(service.Name); err != nil {
-			log.Printf("Error deregistering service %v", service.Name)
+			gns.errors.Printf("Error deregistering service %v", service.Name)
 		}
 	}
 	gns.mu.Unlock()
@@ -132,7 +137,7 @@ func (gns *gRPCNeighbors) DisconnectNeighbor(host string) {
 // Locator infinitive loop running Search every minute
 // use it with Announce to update neighbors in background
 func (gns *gRPCNeighbors) Locator(service string, tag string, interval time.Duration) {
-	log.Printf("Consul neighbors updater started")
+	gns.messages.Printf("Consul neighbors updater started")
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -141,7 +146,7 @@ func (gns *gRPCNeighbors) Locator(service string, tag string, interval time.Dura
 			gns.Search(service, tag)
 
 		case <-gns.updater_close:
-			log.Printf("Consul neighbors updater stopped")
+			gns.messages.Printf("Consul neighbors updater stopped")
 			return
 		}
 	}
@@ -153,7 +158,7 @@ func (gns *gRPCNeighbors) Search(service string, tag string) {
 	gns.initConsul()
 	entries, _, err := gns.client.Health().Service(service, tag, true, nil)
 	if err != nil {
-		log.Printf("Error getting service nodes: %v", err)
+		gns.errors.Printf("Error getting service nodes: %v", err)
 	}
 	if len(entries) == 0 {
 		return
@@ -173,7 +178,7 @@ func (gns *gRPCNeighbors) Search(service string, tag string) {
 			}
 		}
 		if entry.Service.Address == "" || entry.Service.Port == 0 {
-			log.Printf("Bad service %v definition, address and port is obligatory", entry.Service.ID)
+			gns.errors.Printf("Bad service %v definition, address and port is obligatory", entry.Service.ID)
 		}
 		lst = append(lst, newGRPCNeighbor(entry.Service.Address, uint16(entry.Service.Port)))
 	}
@@ -190,13 +195,13 @@ func (gns *gRPCNeighbors) updateNeighbors(neighbors []*GRPCNeighbor) {
 	for _, gn := range neighbors {
 		tmp[gn.Host] = true
 		if _, ok := gns.neighbors[gn.Host]; !ok {
-			log.Printf("New gRPCNeighbor: %v", gn)
+			gns.messages.Printf("New gRPCNeighbor: %v", gn)
 			go gns.createClient(gn)
 		}
 	}
 	for host := range gns.neighbors {
 		if _, ok := tmp[host]; !ok {
-			log.Printf("Closing MygRPCClient connection to %v", host)
+			gns.messages.Printf("Closing connection with %v ", host)
 			go gns.removeClient(host)
 		}
 	}
@@ -227,14 +232,15 @@ func (gns *gRPCNeighbors) createClient(gn *GRPCNeighbor) {
 	gns.mu.Lock()
 	defer gns.mu.Unlock()
 	if gns.connector == nil {
+		gns.errors.Printf("gRPC NeighborhoodConnector not set, ignoring neighbor %v", gn)
 		return
 	}
 	if err := gn.connector(gns.connector); err != nil {
-		log.Printf("Error dialing to %v: %v", gn, err)
+		gns.errors.Printf("Error dialing to %v: %v", gn, err)
 		return
 	}
 	gns.neighbors[gn.Host] = gn
-	log.Printf("Created new MygRPCClient connection to neghbor %v", gn)
+	gns.messages.Printf("Connected with neighbor %v", gn)
 	return
 }
 

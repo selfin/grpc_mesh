@@ -1,7 +1,6 @@
 package grpc_mesh
 
 import (
-	"fmt"
 	consul "github.com/hashicorp/consul/api"
 	"google.golang.org/grpc"
 	"log"
@@ -17,16 +16,27 @@ func (g *MygRPCClient) DoSomething() bool {
 	return true
 }
 
-func AbstractgRPCClient(conn *grpc.ClientConn) (rpc_client interface{}) {
+func gRPCClientConstructor(conn *grpc.ClientConn) (rpc_client interface{}) {
 	return MygRPCClient{}
 
 }
 
-func ExampleNewGRPCNeighbors() {
+func ExampleNeighborhood() {
+	//type MygRPCClient struct {
+	//}
+	//
+	//func (g *MygRPCClient) DoSomething() bool {
+	//	return true
+	//}
+	//
+	//func gRPCClientConstructor(conn *grpc.ClientConn) (rpc_client interface{}) {
+	//	return MygRPCClient{}
+	//
+	//}
 	const service_name string = "RPCService"
 	const hostname string = "hostname"
-	gRPCNeighborhood := NewGRPCNeighbors()
-	gRPCNeighborhood.WithConnector(AbstractgRPCClient)
+	gRPCNeighborhood := NewNeighborhood()
+	gRPCNeighborhood.WithConnector(gRPCClientConstructor)
 	// Port and Address is obligatory for proper work
 	RPCService := &consul.AgentServiceRegistration{
 		ID:      service_name,
@@ -48,8 +58,11 @@ func ExampleNewGRPCNeighbors() {
 }
 
 func initNeighborhood(t *testing.T) Neighborhood {
-	neighborhood := NewGRPCNeighbors()
-	neighborhood.WithConnector(AbstractgRPCClient)
+	neighborhood := &gRPCNeighbors{
+		neighbors:     make(map[string]*GRPCNeighbor),
+		updater_close: make(chan bool),
+	}
+	neighborhood.WithConnector(gRPCClientConstructor)
 	if len(neighborhood.neighbors) != 0 {
 		t.Fatalf("Not nil neighbor list")
 	}
