@@ -1,4 +1,4 @@
-# grpcmesh [![GoDoc](https://godoc.org/github.com/selfin/grpc_mesh?status.png)](https://godoc.org/github.com/selfin/grpc_mesh)
+# grpcmesh [![GoDoc](https://godoc.org/github.com/selfin/grpcmesh?status.png)](https://godoc.org/github.com/selfin/grpcmesh)
 Package grpcmesh provides api to build full mesh gRPC connections between service instances, consul service discovery api used as backend for neighbors lookup
 
 See godoc for usage example.
