@@ -1,4 +1,4 @@
-package grpc_mesh
+package grpcmesh
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+// GRPCNeighbor contains destination Host and Port to
+// connect to gRPC neighbor with
 type GRPCNeighbor struct {
 	// Host - discovered service neighbor hostname or ip addr
 	Host string
@@ -37,7 +39,7 @@ func (gn *GRPCNeighbor) ConnectionString() string {
 	return fmt.Sprintf("%v:%v", gn.Host, gn.Port)
 }
 
-func (gn *GRPCNeighbor) connector(f func(conn *grpc.ClientConn) (rpc_client interface{})) error {
+func (gn *GRPCNeighbor) connector(f func(conn *grpc.ClientConn) (gRPCClient interface{})) error {
 	gn.mu.Lock()
 	defer gn.mu.Unlock()
 	var err error

@@ -1,4 +1,4 @@
-package grpc_mesh
+package grpcmesh
 
 import (
 	"fmt"

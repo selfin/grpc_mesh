@@ -1,7 +1,6 @@
-// Package grpc_mesh
-// provides api to build full mesh gRPC connections between service instances,
+// Package grpcmesh provides api to build full mesh gRPC connections between service instances,
 // consul service discovery api used as backend for neighbors lookup
-package grpc_mesh
+package grpcmesh
 
 import (
 	"fmt"
@@ -13,9 +12,7 @@ import (
 	"time"
 )
 
-// Neighborhood
-// Server example:
-
+// Neighborhood present control interface to discover neighbors with consul api and communicate with them
 type Neighborhood interface {
 	// ConfigureConsul set consul config, if default config not suitable, use it before calling any other func
 	ConfigureConsul(*consul.Config) error
@@ -39,25 +36,25 @@ type Neighborhood interface {
 }
 
 type gRPCNeighbors struct {
-	mu            sync.RWMutex
-	messages      *log.Logger
-	errors        *log.Logger
-	announcer     string
-	connector     func(conn *grpc.ClientConn) (rpc_client interface{})
-	services      []*consul.AgentServiceRegistration
-	client        *consul.Client
-	client_conf   *consul.Config
-	updater_close chan bool
-	neighbors     map[string]*GRPCNeighbor
+	mu           sync.RWMutex
+	messages     *log.Logger
+	errors       *log.Logger
+	announcer    string
+	connector    func(conn *grpc.ClientConn) (rpc_client interface{})
+	services     []*consul.AgentServiceRegistration
+	client       *consul.Client
+	clientConf   *consul.Config
+	updaterClose chan bool
+	neighbors    map[string]*GRPCNeighbor
 }
 
 // NewNeighborhood returns prepared consul based discovery
 func NewNeighborhood() Neighborhood {
 	return &gRPCNeighbors{
-		neighbors:     make(map[string]*GRPCNeighbor),
-		updater_close: make(chan bool),
-		messages:      log.New(os.Stdout, "", log.LstdFlags),
-		errors:        log.New(os.Stderr, "ERROR: ", log.LstdFlags|log.Lshortfile|log.Lmicroseconds),
+		neighbors:    make(map[string]*GRPCNeighbor),
+		updaterClose: make(chan bool),
+		messages:     log.New(os.Stdout, "", log.LstdFlags),
+		errors:       log.New(os.Stderr, "ERROR: ", log.LstdFlags|log.Lshortfile|log.Lmicroseconds),
 	}
 }
 
@@ -65,8 +62,8 @@ func NewNeighborhood() Neighborhood {
 func (gns *gRPCNeighbors) ConfigureConsul(config *consul.Config) error {
 	gns.mu.Lock()
 	defer gns.mu.Unlock()
-	if gns.client_conf == nil {
-		gns.client_conf = config
+	if gns.clientConf == nil {
+		gns.clientConf = config
 	} else {
 		return fmt.Errorf("configuration already created, use ConfigureConsul before running Announce and Search")
 	}
@@ -81,15 +78,17 @@ func (gns *gRPCNeighbors) WithConnector(f func(conn *grpc.ClientConn) (rpc_clien
 }
 
 // Announce registers provided services with consul api
-func (gns *gRPCNeighbors) Announce(services ...*consul.AgentServiceRegistration) error {
+func (gns *gRPCNeighbors) Announce(services ...*consul.AgentServiceRegistration) (err error) {
 	gns.initConsul()
-	if name, err := gns.client.Agent().NodeName(); err != nil {
+    var name string
+	if name, err = gns.client.Agent().NodeName(); err != nil {
 		return err
-	} else {
-		gns.mu.Lock()
-		gns.announcer = name
-		gns.mu.Unlock()
 	}
+
+	gns.mu.Lock()
+	gns.announcer = name
+	gns.mu.Unlock()
+
 	for _, service := range services {
 		if err := gns.client.Agent().ServiceRegister(service); err != nil {
 			return err
@@ -102,7 +101,7 @@ func (gns *gRPCNeighbors) Announce(services ...*consul.AgentServiceRegistration)
 // StopAnnounce stops Locator and deregister all registered with consul services
 func (gns *gRPCNeighbors) StopAnnounce() {
 	gns.mu.Lock()
-	close(gns.updater_close)
+	close(gns.updaterClose)
 	for _, service := range gns.services {
 		if err := gns.client.Agent().ServiceDeregister(service.Name); err != nil {
 			gns.errors.Printf("Error deregistering service %v", service.Name)
@@ -145,7 +144,7 @@ func (gns *gRPCNeighbors) Locator(service string, tag string, interval time.Dura
 		case <-ticker.C:
 			gns.Search(service, tag)
 
-		case <-gns.updater_close:
+		case <-gns.updaterClose:
 			gns.messages.Printf("Consul neighbors updater stopped")
 			return
 		}
@@ -217,10 +216,10 @@ func (gns *gRPCNeighbors) initConsul() (err error) {
 	if gns.client != nil {
 		return nil
 	}
-	if gns.client_conf == nil {
-		gns.client_conf = consul.DefaultConfig()
+	if gns.clientConf == nil {
+		gns.clientConf = consul.DefaultConfig()
 	}
-	if gns.client, err = consul.NewClient(gns.client_conf); err != nil {
+	if gns.client, err = consul.NewClient(gns.clientConf); err != nil {
 		return err
 	}
 	return nil

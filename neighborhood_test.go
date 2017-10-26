@@ -1,4 +1,4 @@
-package grpc_mesh
+package grpcmesh
 
 import (
 	consul "github.com/hashicorp/consul/api"
@@ -16,7 +16,7 @@ func (g *MygRPCClient) DoSomething() bool {
 	return true
 }
 
-func gRPCClientConstructor(conn *grpc.ClientConn) (rpc_client interface{}) {
+func gRPCClientConstructor(conn *grpc.ClientConn) (rpcClient interface{}) {
 	return MygRPCClient{}
 
 }
@@ -33,14 +33,14 @@ func ExampleNeighborhood() {
 	//	return MygRPCClient{}
 	//
 	//}
-	const service_name string = "RPCService"
+	const serviceName string = "RPCService"
 	const hostname string = "hostname"
 	gRPCNeighborhood := NewNeighborhood()
 	gRPCNeighborhood.WithConnector(gRPCClientConstructor)
 	// Port and Address is obligatory for proper work
 	RPCService := &consul.AgentServiceRegistration{
-		ID:      service_name,
-		Name:    service_name,
+		ID:      serviceName,
+		Name:    serviceName,
 		Port:    4000,
 		Tags:    []string{"datacenter1"},
 		Address: hostname,
@@ -48,7 +48,7 @@ func ExampleNeighborhood() {
 	if err := gRPCNeighborhood.Announce(RPCService); err != nil {
 		log.Fatalln(err)
 	}
-	go gRPCNeighborhood.Locator(service_name, "datacenter1", time.Minute)
+	go gRPCNeighborhood.Locator(serviceName, "datacenter1", time.Minute)
 
 	// Using discovery
 	neighbor, _ := gRPCNeighborhood.GetNeighbor(hostname)
@@ -59,8 +59,8 @@ func ExampleNeighborhood() {
 
 func initNeighborhood(t *testing.T) Neighborhood {
 	neighborhood := &gRPCNeighbors{
-		neighbors:     make(map[string]*GRPCNeighbor),
-		updater_close: make(chan bool),
+		neighbors:    make(map[string]*GRPCNeighbor),
+		updaterClose: make(chan bool),
 	}
 	neighborhood.WithConnector(gRPCClientConstructor)
 	if len(neighborhood.neighbors) != 0 {
