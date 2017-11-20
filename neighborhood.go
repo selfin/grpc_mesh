@@ -50,6 +50,7 @@ type gRPCNeighbors struct {
 // NewNeighborhood returns prepared consul based discovery
 func NewNeighborhood() Neighborhood {
 	return &gRPCNeighbors{
+		services:     make([]*consul.AgentServiceRegistration, 0, 2),
 		neighbors:    make(map[string]*GRPCNeighbor),
 		updaterClose: make(chan bool),
 	}
